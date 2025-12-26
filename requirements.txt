@@ -1,0 +1,1 @@
+streamlitpandasTabulateseabornmatplotlibscikit-learngoogle-generativeailangchainlangchain-experimentallangchain-google-genaiopenpyxl
