@@ -1,80 +1,64 @@
 import streamlit as st
 import pandas as pd
-import google.generativeai as genai
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
-import io
+import google.generativeai as genai
 
-# --- 1. SECURE GATEKEEPER ---
-def check_password():
-    if st.session_state.get("password_correct", False):
-        return True
-    
-    st.title("🔒 Data Science Lab Login")
-    pwd = st.text_input("Enter Access Key", type="password")
-    if st.button("Unlock Agent"):
-        # You can change 'data2025' to whatever password you want
-        if pwd == "data2025": 
+# --- 1. ACCESS CONTROL ---
+if "password_correct" not in st.session_state:
+    st.session_state.password_correct = False
+
+if not st.session_state.password_correct:
+    st.title("🔒 Data Lab Login")
+    pwd = st.text_input("Enter 4-Digit Access Code (4894)", type="password")
+    if st.button("Unlock"):
+        if pwd == st.secrets["APP_PASSWORD"]:
             st.session_state.password_correct = True
             st.rerun()
         else:
-            st.error("Incorrect Password")
-    return False
-
-if not check_password():
+            st.error("Incorrect code.")
     st.stop()
 
-# --- 2. CONFIGURATION ---
-# Use st.secrets for Streamlit Cloud, or a string for Colab testing
-API_KEY = "AIzaSyAv3GRjjJypWmC6Kg3JzUgSHrmjS-v9-cY" 
-genai.configure(api_key=API_KEY)
-llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=API_KEY)
+# --- 2. THE DIAGNOSTIC TOOL ---
+st.title("🤖 AI Data Agent: Troubleshooting Mode")
 
-# --- 3. UI LAYOUT ---
-st.title("🕵️‍♂️ AI Data Science Agent")
-st.markdown("Upload a file and ask the agent to clean, analyze, or model it.")
+# Let's verify the key is even being read
+if "GEMINI_API_KEY" not in st.secrets:
+    st.error("❌ CRITICAL: 'GEMINI_API_KEY' not found in Streamlit Secrets!")
+    st.stop()
 
-uploaded_file = st.file_uploader("Upload your messy dataset", type=["csv", "xlsx"])
+API_KEY = st.secrets["GEMINI_API_KEY"]
+
+if st.button("🔎 Run Connection Test"):
+    try:
+        # Test basic Google Generative AI connection
+        genai.configure(api_key=API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content("Hello! Are you working?")
+        st.success(f"✅ API Key is Valid! Google responded: {response.text}")
+    except Exception as e:
+        st.error(f"❌ Connection Failed: {e}")
+        st.info("If it says 'API_KEY_INVALID', go to AI Studio and get a fresh key.")
+
+# --- 3. DATA & AGENT ---
+st.divider()
+uploaded_file = st.file_uploader("Upload Data", type=["csv", "xlsx"])
 
 if uploaded_file:
-    # Load data once and keep it in memory
-    if 'df' not in st.session_state:
-        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-        st.session_state.df = df
+    df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
+    st.write("Preview:", df.head(3))
     
-    df = st.session_state.df
-    st.subheader("📊 Current Data Preview")
-    st.dataframe(df.head(10))
-
-    # --- 4. THE AGENTIC CHAT ---
-    st.divider()
-    agent = create_pandas_dataframe_agent(llm, df, verbose=True, allow_dangerous_code=True)
+    # Setup LLM and Agent
+    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=API_KEY)
     
-    query = st.chat_input("Command the agent (e.g., 'Clean all nulls' or 'Normalize the Age column')")
-    
-    if query:
-        with st.spinner("Agent is writing and executing Python code..."):
-            # The agent modifies the dataframe
-            result = agent.run(query)
-            st.write("### Agent Response:")
-            st.info(result)
-            
-            # Important: We tell the agent to update the session state if it changed the data
-            st.session_state.df = df 
-
-    # --- 5. DOWNLOAD SECTION ---
-    st.divider()
-    st.subheader("💾 Export Your Work")
-    
-    @st.cache_data
-    def convert_df(df_to_save):
-        return df_to_save.to_csv(index=False).encode('utf-8')
-
-    csv_data = convert_df(st.session_state.df)
-    
-    st.download_button(
-        label="Download Cleaned Data (CSV)",
-        data=csv_data,
-        file_name="ai_cleaned_data.csv",
-        mime="text/csv",
-    )
+    # We add a try-except here to catch the agent's specific failure
+    try:
+        agent = create_pandas_dataframe_agent(llm, df, verbose=True, allow_dangerous_code=True)
+        query = st.chat_input("What should the agent do?")
+        
+        if query:
+            with st.spinner("Agent is working..."):
+                res = agent.run(query)
+                st.info(res)
+    except Exception as e:
+        st.error(f"⚠️ Agent Initialization Error: {e}")
