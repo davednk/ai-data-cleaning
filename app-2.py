@@ -12,7 +12,7 @@ if not st.session_state.password_correct:
     st.title("🔒 Data Lab Login")
     pwd = st.text_input("Enter 4-Digit Access Code (4894)", type="password")
     if st.button("Unlock"):
-        if pwd == st.secrets["APP_PASSWORD"]:
+        if pwd == st.secrets["4894"]:
             st.session_state.password_correct = True
             st.rerun()
         else:
@@ -27,7 +27,7 @@ if "GEMINI_API_KEY" not in st.secrets:
     st.error("❌ CRITICAL: 'GEMINI_API_KEY' not found in Streamlit Secrets!")
     st.stop()
 
-API_KEY = st.secrets["GEMINI_API_KEY"]
+API_KEY = st.secrets["AIzaSyAv3GRjjJypWmC6Kg3JzUgSHrmjS-v9-cY"]
 
 if st.button("🔎 Run Connection Test"):
     try:
